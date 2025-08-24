@@ -3,45 +3,66 @@ import Globe from "react-globe.gl";
 
 const World = () => {
     const [arcsData, setArcsData] = useState([]);
+    const [locations, setLocations] = useState(null);
 
-    // Generate realistic attack arcs
     useEffect(() => {
+        // Fetch locations data
+        fetch('http://localhost:3001/api/locations')
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return res.json();
+            })
+            .then(data => {
+                if (data.result && data.result.locations) {
+                    console.log('Locations data:', data.result.locations);
+                    const locationsMap = new Map(data.result.locations.map(loc => [loc.alpha2, loc]));
+                    setLocations(locationsMap);
+                }
+            })
+            .catch(error => console.error('Error fetching locations:', error));
+    }, []);
+
+    useEffect(() => {
+        if (!locations) return;
+
         const interval = setInterval(() => {
-            // Realistic DDoS attack data between major cities
-            const attacks = [
-                // US to Europe
-                { startLat: 37.7749, startLng: -122.4194, endLat: 51.5074, endLng: -0.1278 }, // San Francisco to London
-                { startLat: 40.7128, startLng: -74.0060, endLat: 48.8566, endLng: 2.3522 },  // New York to Paris
-                // Asia to US
-                { startLat: 35.6762, startLng: 139.6503, endLat: 34.0522, endLng: -118.2437 }, // Tokyo to Los Angeles
-                { startLat: 31.2304, startLng: 121.4737, endLat: 37.7749, endLng: -122.4194 }, // Shanghai to San Francisco
-                // Europe to Asia
-                { startLat: 51.5074, startLng: -0.1278, endLat: 55.7558, endLng: 37.6173 },  // London to Moscow
-                { startLat: 48.8566, startLng: 2.3522, endLat: 52.5200, endLng: 13.4050 },     // Paris to Berlin to Beijing
-                // Asia to Asia
-                { startLat: 35.6762, startLng: 139.6503, endLat: 37.5665, endLng: 126.9780 }, // Tokyo to Seoul
-                { startLat: 28.6139, startLng: 77.2090, endLat: 31.2304, endLng: 121.4737 },  // Delhi to Shanghai
-                // Australia to US
-                { startLat: -33.8688, startLng: 151.2093, endLat: 34.0522, endLng: -118.2437 }, // Sydney to Los Angeles
-                // US to Asia
-                { startLat: 40.7128, startLng: -74.0060, endLat: 35.6762, endLng: 139.6503 }  // New York to Tokyo
-            ];
+            fetch('http://localhost:3001/api/cloudflare-attacks')
+                .then(res => {
+                    if (!res.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    if (data.result && data.result.top_0) {
+                        console.log('Attacks data:', data.result.top_0);
+                        const newArcs = data.result.top_0.map(attack => {
+                            const start = locations.get(attack.origin_country_alpha2);
+                            const end = locations.get(attack.target_country_alpha2);
 
-            const randomAttack = attacks[Math.floor(Math.random() * attacks.length)];
+                            if (start && end) {
+                                return {
+                                    startLat: start.latitude,
+                                    startLng: start.longitude,
+                                    endLat: end.latitude,
+                                    endLng: end.longitude,
+                                    color: `rgba(0, 255, 255, 0.8)`,
+                                };
+                            }
+                            return null;
+                        }).filter(Boolean);
 
-            const newArc = {
-                startLat: randomAttack.startLat,
-                startLng: randomAttack.startLng,
-                endLat: randomAttack.endLat,
-                endLng: randomAttack.endLng,
-                color: `rgba(0, 255, 255, 0.8)`, // Bright cyan for DDoS attacks
-            };
-
-            setArcsData((prev) => [...prev, newArc].slice(-15)); // Keep last 15 arcs
-        }, 1500);
+                        console.log('New arcs:', newArcs);
+                        setArcsData(prev => [...prev, ...newArcs].slice(-15));
+                    }
+                })
+                .catch(error => console.error('Error fetching attacks:', error));
+        }, 5000); // Fetch new data every 5 seconds
 
         return () => clearInterval(interval);
-    }, []);
+    }, [locations]);
 
     return (
         <Globe
