@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -29,6 +31,37 @@ const mockAttacks = [
 app.get('/api/attacks', (req, res) => {
   // Return all mock attacks
   res.json(mockAttacks);
+});
+
+app.get('/api/cloudflare-attacks', async (req, res) => {
+  try {
+    const response = await axios.get(`https://api.cloudflare.com/client/v4/radar/attacks/layer3/top/attacks?dateRange=7d&format=JSON`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching data from Cloudflare API:', error.response.data);
+    res.status(500).json({ error: 'Failed to fetch data' });
+  }
+});
+
+app.get('/api/locations', async (req, res) => {
+  try {
+    const response = await axios.get('https://api.cloudflare.com/client/v4/radar/entities/locations', {
+      params: {
+        format: 'JSON'
+      },
+      headers: {
+        'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching data from Cloudflare API:', error);
+    res.status(500).json({ error: 'Failed to fetch data' });
+  }
 });
 
 app.listen(PORT, () => {
